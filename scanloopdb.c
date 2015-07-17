@@ -3,8 +3,8 @@
 
    \file       scanloopdb.c
    
-   \version    V1.0
-   \date       16.07.15
+   \version    V1.1
+   \date       17.07.15
    \brief      Scan a structure against the loop database
    
    \copyright  (c) Dr. Andrew C. R. Martin, UCL, 2015
@@ -46,6 +46,7 @@
    Revision History:
    =================
    V1.0   16.07.15  Original   By: ACRM
+   V1.1   17.07.15  Added -l to allow loop length to be specified
 
 *************************************************************************/
 /* Includes
@@ -93,10 +94,10 @@ typedef struct _loop
 int  main(int argc, char **argv);
 BOOL ParseCmdLine(int argc, char **argv, char *infile, char *outfile,
                   char *dbFile, REAL *tolerance, char *startRes, 
-                  char *endRes, int *numResult);
+                  char *endRes, int *numResult, int *loopLen);
 void Usage(void);
 LOOP *FindLoops(PDB *pdb, char *startRes, char *endRes, FILE *dbf, 
-                REAL tolerance);
+                REAL tolerance, int loopLen);
 BOOL PrintLoops(FILE *out, LOOP *loops, int maxLoops);
 LOOP *ScanMatrix(REAL distMat[3][3], int LoopLen, FILE *dbf, 
                  REAL tolerance);
@@ -111,6 +112,7 @@ LOOP **IndexResults(LOOP *loops, int *nLoops);
    Main program
 
 -  14.07.15 Original   By: ACRM
+-  17.07.15 Handles loop length
 */
 int main(int argc, char **argv)
 {
@@ -120,7 +122,8 @@ int main(int argc, char **argv)
         startRes[SMALLBUFF],
         endRes[SMALLBUFF];
    int  natoms,
-        numResult = 0;
+        numResult = 0,
+        loopLen = 0;
    REAL tolerance = DEF_TOLERANCE;
    LOOP *loops    = NULL;
    PDB  *pdb      = NULL;
@@ -130,7 +133,7 @@ int main(int argc, char **argv)
 
 
    if(!ParseCmdLine(argc, argv, infile, outfile, dbFile, &tolerance, 
-                    startRes, endRes, &numResult))
+                    startRes, endRes, &numResult, &loopLen))
    {
       Usage();
       return(0);
@@ -146,7 +149,7 @@ int main(int argc, char **argv)
                if((pdb = blSelectCaPDB(pdb))!=NULL)
                {
                   if((loops = FindLoops(pdb, startRes, endRes, dbf, 
-                                        tolerance))!=NULL)
+                                        tolerance, loopLen))!=NULL)
                   {
                      if(!PrintLoops(out, loops, numResult))
                      {
@@ -182,7 +185,7 @@ int main(int argc, char **argv)
 
 /************************************************************************/
 /*>LOOP *FindLoops(PDB *pdb, char *startRes, char *endRes, FILE *dbf, 
-                   REAL tolerance)
+                   REAL tolerance, int loopLen)
    ------------------------------------------------------------------
 *//**
    \param[in]  *pdb       PDB linked list
@@ -190,21 +193,22 @@ int main(int argc, char **argv)
    \param[in]  *endRes    Residue identifier for last residue
    \param[in]  *dbf       File pointer for database file
    \param[in]  tolerance  Allowed tolerance for an individual distance
+   \param[in]  loopLen    Desired loop length (0 = same as structure)
    \return                Linked list of loops that match the criteria
 
    Scans the relevant residues against the loop database
 
 -  14.07.15 Original   By: ACRM
+-  17.07.15 Handles loop length as a parameter
 */
 LOOP *FindLoops(PDB *pdb, char *startRes, char *endRes, FILE *dbf, 
-                REAL tolerance)
+                REAL tolerance, int loopLen)
 {
    PDB  *p,
         *pStartRes,
         *pEndRes,
         *n[3] = {NULL, NULL, NULL},
         *c[3] = {NULL, NULL, NULL};
-   int  loopLen = 0;
    int  i, j;
    REAL distMat[3][3];
    LOOP *loops = NULL;
@@ -215,11 +219,17 @@ LOOP *FindLoops(PDB *pdb, char *startRes, char *endRes, FILE *dbf,
    if((pEndRes = blFindResidueSpec(pdb, endRes))==NULL)
       return(NULL);
    
-   /* First see how long the loop is                                    */
-   for(p=pStartRes; p!=pEndRes->next; NEXT(p))
+   /* If loop length not specified, see how long the one in the PDB file
+      is and use that length
+   */
+   if(loopLen == 0)
    {
-      loopLen++;
+      for(p=pStartRes; p!=pEndRes->next; NEXT(p))
+      {
+         loopLen++;
+      }
    }
+   
 
    /* Find the 3 residues before the start of the loop                  */
    for(p=pdb; p!=pStartRes; NEXT(p))
@@ -350,26 +360,30 @@ LOOP *ScanMatrix(REAL distMat[3][3], int loopLen, FILE *dbf,
 /************************************************************************/
 /*>BOOL ParseCmdLine(int argc, char **argv, char *infile, char *outfile,
                      char *dbFile, REAL *tolerance, char *startRes, 
-                     char *endRes, in *numResult)
+                     char *endRes, int *numResult, int *loopLen)
    ---------------------------------------------------------------------
 *//**
    \param[in]  argc              Argument count
    \param[in]  **argv            Argument array
    \param[out] *infile           Input filename (or blank string) 
    \param[out] *outfile          Output filename (or blank string)
-   \param[out] *minLength        miniumum loop length to display  
-   \param[out] *maxLength        maxiumum loop length to display  
-   \param[out] *isDirectory      'filename' is a directory        
-   \param[out] *distTable        Distance table filename          
+   \param[out] *dbFile           Database file to search
+   \param[out] *tolerance        Max deviation on an individual distance
+   \param[out] *startRes         Start residue ID
+   \param[out] *endRes           End residue ID
+   \param[out] *numResult        Number of results to print
+   \param[out] *loopLen          Loop length (0 to use the same as in the
+                                 input PDB file)
    \return                       Success
 
    Parse the command line
 
 -  14.07.15 Original    By: ACRM
+-  17.07.15 Added loopLen
 */
 BOOL ParseCmdLine(int argc, char **argv, char *infile, char *outfile,
                   char *dbFile, REAL *tolerance, char *startRes, 
-                  char *endRes, int *numResult)
+                  char *endRes, int *numResult, int *loopLen)
 {
    BOOL gotArg = FALSE;
    
@@ -380,7 +394,7 @@ BOOL ParseCmdLine(int argc, char **argv, char *infile, char *outfile,
    strcpy(endRes,   DEF_ENDRES);
    infile[0]  = outfile[0] = dbFile[0] = '\0';
    *tolerance = DEF_TOLERANCE;
-   *numResult = 0;
+   *numResult = *loopLen = 0;
    
    while(argc)
    {
@@ -398,6 +412,12 @@ BOOL ParseCmdLine(int argc, char **argv, char *infile, char *outfile,
             argv++;
             argc--;
             if(!argc || !sscanf(argv[0], "%d", numResult))
+               return(FALSE);
+            break;
+         case 'l':
+            argv++;
+            argc--;
+            if(!argc || !sscanf(argv[0], "%d", loopLen))
                return(FALSE);
             break;
          case 'r':
@@ -459,26 +479,29 @@ BOOL ParseCmdLine(int argc, char **argv, char *infile, char *outfile,
    Prints a usage message
 
 -  14.07.15 Original   By: ACRM
+-  17.07.15 Handles loop length
 */
 void Usage(void)
 {
-   fprintf(stderr,"\nscanloopdb V1.0 (c) 2015 UCL, Dr. Andrew C.R. \
+   fprintf(stderr,"\nscanloopdb V1.1 (c) 2015 UCL, Dr. Andrew C.R. \
 Martin.\n");
 
-   fprintf(stderr,"\nUsage: scanloopdb [-t tol][-n nresults]\
-[-r startres endres] loops.db\n");
-   fprintf(stderr,"                  [in.pdb [out.txt]]\n");
-   fprintf(stderr,"          -t Set tolerance for an individual \
-distance [%.3f]\n", DEF_TOLERANCE);
-   fprintf(stderr,"          -n Maximum number of results [unlimited]\n");
-   fprintf(stderr,"          -r Set the boundaries of the loop [%s %s]\n",
-           DEF_STARTRES, DEF_ENDRES);
-   fprintf(stderr,"          loops.db - loop database from \
+   fprintf(stderr,"\nUsage: scanloopdb [-l loopLen][-t tol][-n nresults]\
+[-r startres endres]\n");
+   fprintf(stderr,"                  loops.db [in.pdb [out.txt]]\n");
+   fprintf(stderr,"\n                  loops.db - loop database from \
 buildloopdb\n");
-   fprintf(stderr,"Input/output is to standard input/output if files are \
-not specified.\n\n");
+   fprintf(stderr,"                  -l - Specify the loop length \
+[Default: same as the\n");
+   fprintf(stderr,"                       input PDB file]\n");
+   fprintf(stderr,"                  -t - Set tolerance for an \
+individual distance [%.2f]\n", DEF_TOLERANCE);
+   fprintf(stderr,"                  -n - Maximum number of results \
+[unlimited]\n");
+   fprintf(stderr,"                  -r - Set the boundaries of the \
+loop [%s %s]\n", DEF_STARTRES, DEF_ENDRES);
 
-   fprintf(stderr,"Generates a set of loop candidates from the loop \
+   fprintf(stderr,"\nGenerates a set of loop candidates from the loop \
 database. Scans the\n");
    fprintf(stderr,"specified loop (default CDR-H3) from the PDB file \
 against the database\n");
@@ -488,7 +511,9 @@ deviation of the 9\n");
 residues either\n");
    fprintf(stderr,"side of the loop. -t specifies the maximum deviation \
 for any individual\n");
-   fprintf(stderr,"distance.\n\n");
+   fprintf(stderr,"distance.\n");
+   fprintf(stderr,"Input/output is to standard input/output if files are \
+not specified.\n\n");
 
 }
 
