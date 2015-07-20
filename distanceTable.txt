@@ -1,0 +1,37 @@
+# These pairs of distances represent the minimum and maximum distances
+# from an Nter residue to a Cter residue. 
+# Given an Nter position N and a Cter position C representing stem
+# regions to which a loop is attached we give ranges for
+# N   C-2
+# N   C-1
+# N   C
+# N+1 C-2
+# N+1 C-1
+# N+1 C
+# N+2 C-2
+# N+2 C-1
+# N+2 C
+#
+# From position N
+1.04  10.07
+2.69   8.58 
+3.83  10.78
+# From position N+1
+0.00  50.00
+0.00  50.00
+6.15  11.02
+# From position N+2
+0.00  50.00
+0.00  50.00
+9.20  14.33
+
+
+
+
+
+
+
+
+
+
+
