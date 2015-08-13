@@ -9,7 +9,7 @@ make
 ./buildloopdb /data/pdb >loops.db
 
 # Scan a structure against the loop database
-./scanloopdb loops.db file.pdb > file.hits
+./scanloopdb -l looplen loops.db file.pdb > file.hits
 
 
 # NOTES
