@@ -27,15 +27,7 @@ finddist : $(FOBJS)
 .c.o : 
 	$(CC) $(COPT) -c -o $@ $<
 
-clean :
-	\rm -f $(BOBJS) $(SOBJS) $(FOBJS)
-	\rm -rf NR_Combined??_Chothia*
-	\rm -rf abdb
-
-distclean : clean
-	\rm -f $(EXE)
-
-distances :
+distances.h :
 	wget http://www.bioinf.org.uk/abs/abdb/Data/NR_CombinedAb_Chothia.tar.bz2
 	wget http://www.bioinf.org.uk/abs/abdb/Data/NR_CombinedHv_Chothia.tar.bz2
 	tar xvf NR_CombinedAb_Chothia.tar.bz2
@@ -44,6 +36,18 @@ distances :
 	mv NR_CombinedAb_Chothia/* abdb
 	mv NR_CombinedHv_Chothia/* abdb
 	./makedistances.pl > distances.h
+
+install : $(EXE)
+	mkdir -p ../bin
+	cp $(EXE) ../bin
+
+clean :
+	\rm -f $(BOBJS) $(SOBJS) $(FOBJS)
+	\rm -rf NR_Combined??_Chothia*
+	\rm -rf abdb
+
+distclean : clean
+	\rm -f $(EXE)
 
 
 
