@@ -61,6 +61,22 @@ finddist.c to specify a different set of residues). Alternatively you
 can provide a file to the program via the `-t` flag that will override
 the default distances.
 
+Note that the resulting loop database contains the following fields:
+
+1  The PDB code
+2  The first residue (including the 3 residue overlap with framework)
+3  The last residue (including the 3 residue overlap with framework)
+4  The length of the loop (excluding the overlap with framework)
+5  n0-c0
+6  n0-c1
+7  n0-c2
+8  n1-c0 
+9  n1-c1 
+10 n1-c2
+11 n2-c0
+12 n2-c1
+13 n2-c2
+
 scanloopdb.c
 ------------
 
