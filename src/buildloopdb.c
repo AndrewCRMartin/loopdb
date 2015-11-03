@@ -306,9 +306,17 @@ void ProcessFile(FILE *in, FILE *out, int minLength, int maxLength,
                               minTable, maxTable);
          if(verbose)
             fprintf(stderr,"%d loops found\n", nLoops);
-      
+
+         FREELIST(pdb, PDB);
       }
-      FREELIST(pdb, PDB);
+      else if(verbose)
+      {
+         fprintf(stderr,"No CA atoms extracted\n");
+      }
+   }
+   else if(verbose)
+   {
+      fprintf(stderr,"No atoms read from PDB file\n");
    }
 }
 
