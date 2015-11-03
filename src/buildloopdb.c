@@ -3,8 +3,8 @@
 
    \file       buildloopdb.c
    
-   \version    V1.0
-   \date       16.07.15
+   \version    V1.1
+   \date       03.11.15
    \brief      Build a database of CDR-H3 like loops
    
    \copyright  (c) Dr. Andrew C. R. Martin, UCL, 2015
@@ -53,6 +53,9 @@
    Revision History:
    =================
    V1.0   16.07.15  Original   By: ACRM
+   V1.1   03.11.15  Now reads the file list then processes files
+                    rather than doing both in one step
+                    Added -v
 
 *************************************************************************/
 /* Includes
@@ -85,7 +88,7 @@
 int  main(int argc, char **argv);
 BOOL ParseCmdLine(int argc, char **argv, char *infile, char *outfile,
                   int *minLength, int *maxLength, BOOL *isDirectory,
-                  char *distTable);
+                  char *distTable, BOOL *verbose);
 void Usage(void);
 void RunAnalysis(FILE *out, PDB *pdb, int minLength, int maxLength, 
                  char *pdbCode, REAL minTable[3][3], REAL maxTable[3][3]);
@@ -95,7 +98,7 @@ void ProcessFile(FILE *in, FILE *out, int minLength, int maxLength,
                  char *pdbCode, REAL minTable[3][3], REAL maxTable[3][3]);
 void ProcessAllFiles(FILE *out, char *dirName, int minLength, 
                      int maxLength, REAL minTable[3][3], 
-                     REAL maxTable[3][3]);
+                     REAL maxTable[3][3], BOOL verbose);
 void PrintHeader(FILE *out, char *dirName);
 void ReadDistanceTable(char *distTable, REAL minTable[3][3],
                        REAL maxTable[3][3]);
@@ -118,7 +121,8 @@ int main(int argc, char **argv)
    int  minLength   = 0,
         maxLength   = 0,
         retval      = 0;
-   BOOL isDirectory = FALSE;
+   BOOL isDirectory = FALSE,
+        verbose     = FALSE;
    REAL minTable[3][3],
         maxTable[3][3];
 
@@ -126,7 +130,7 @@ int main(int argc, char **argv)
    SetUpMinMaxTables(minTable, maxTable);
 
    if(!ParseCmdLine(argc, argv, infile, outfile, &minLength, &maxLength,
-                    &isDirectory, distTable))
+                    &isDirectory, distTable, &verbose))
    {
       Usage();
       return(0);
@@ -144,7 +148,7 @@ int main(int argc, char **argv)
          {
             PrintHeader(out, infile);
             ProcessAllFiles(out, infile, minLength, maxLength, 
-                            minTable, maxTable);
+                            minTable, maxTable, verbose);
          }
       }
       else
@@ -204,16 +208,23 @@ void PrintHeader(FILE *out, char *dirName)
    via calls to ProcessFile()
 
 -  14.07.15 Original   By: ACRM
+-  03.11.15 Now reads the file list first and then works through.
+            It seemed to be failing, maybe because the directory was
+            changing?
 */
 void ProcessAllFiles(FILE *out, char *dirName, int minLength, 
                      int maxLength, REAL minTable[3][3], 
-                     REAL maxTable[3][3])
+                     REAL maxTable[3][3], BOOL verbose)
 {
    DIR           *dp;
    struct dirent *dent;
-   char          filename[MAXBUFF];
+   char          filename[MAXBUFF],
+                 *fname;
    FILE          *in;
+   STRINGLIST    *fileList = NULL,
+                 *string;
    
+   /* Get the list of PDB files                                         */
    if((dp=opendir(dirName))!=NULL)
    {
       while((dent=readdir(dp))!=NULL)
@@ -221,18 +232,35 @@ void ProcessAllFiles(FILE *out, char *dirName, int minLength,
          if(dent->d_name[0] != '.')
          {
             sprintf(filename,"%s/%s",dirName,dent->d_name);
-            if((in=fopen(filename, "r"))!=NULL)
+            if((fileList = blStoreString(fileList, filename))==NULL)
             {
-               char *pdbCode;
-               pdbCode = blFNam2PDB(filename);
-               fprintf(stderr,"%s\n", filename);
-               ProcessFile(in, out, minLength, maxLength, pdbCode, 
-                           minTable, maxTable);
-               fclose(in);
+               fprintf(stderr,"Error (buildloopdb): No memory for file \
+list.\n");
+               exit(1);
+            }
+            if(verbose)
+            {
+               fprintf(stderr,"Listing: %s\n", filename);
             }
          }
       }
       closedir(dp);
+   }
+   
+   /* now work through the file list processing each in turn            */
+   for(string=fileList; string!=NULL; NEXT(string))
+   {
+      fname = string->string;
+      
+      if((in=fopen(fname, "r"))!=NULL)
+      {
+         char *pdbCode;
+         pdbCode = blFNam2PDB(fname);
+         fprintf(stderr,"Processing: %s\n", fname);
+         ProcessFile(in, out, minLength, maxLength, pdbCode, 
+                     minTable, maxTable);
+         fclose(in);
+      }
    }
 }
 
@@ -279,7 +307,7 @@ void ProcessFile(FILE *in, FILE *out, int minLength, int maxLength,
 /************************************************************************/
 /*>BOOL ParseCmdLine(int argc, char **argv, char *infile, char *outfile,
                      int *minLength, int *maxLength, BOOL *isDirectory,
-                     char *distTable)
+                     char *distTable, BOOL *verbose)
    ---------------------------------------------------------------------
 *//**
    \param[in]   argc              Argument count
@@ -290,6 +318,7 @@ void ProcessFile(FILE *in, FILE *out, int minLength, int maxLength,
    \param[out]  *maxLength        maxiumum loop length to display   
    \param[out]  *isDirectory      Input 'filename' is a directory   
    \param[out]  *distTable        Distance table filename           
+   \param[out]  *verbose          Verbose mode                      
    \return                        Success
 
    Parse the command line
@@ -298,7 +327,7 @@ void ProcessFile(FILE *in, FILE *out, int minLength, int maxLength,
 */
 BOOL ParseCmdLine(int argc, char **argv, char *infile, char *outfile,
                   int *minLength, int *maxLength, BOOL *isDirectory,
-                  char *distTable)
+                  char *distTable, BOOL *verbose)
 {
    BOOL gotArg = FALSE;
    
@@ -337,6 +366,9 @@ BOOL ParseCmdLine(int argc, char **argv, char *infile, char *outfile,
             break;
          case 'p':
             *isDirectory = FALSE;
+            break;
+         case 'v':
+            *verbose = TRUE;
             break;
          default:
             return(FALSE);
@@ -385,14 +417,14 @@ BOOL ParseCmdLine(int argc, char **argv, char *infile, char *outfile,
 */
 void Usage(void)
 {
-   fprintf(stderr,"\nbuildloopdb V1.0 (c) 2015 UCL, Dr. Andrew C.R. \
+   fprintf(stderr,"\nbuildloopdb V1.1 (c) 2015 UCL, Dr. Andrew C.R. \
 Martin.\n");
 
-   fprintf(stderr,"\nUsage: buildloopdb [-m minLength][-x maxLength]\
+   fprintf(stderr,"\nUsage: buildloopdb [-v][-m minLength][-x maxLength]\
 [-t disttable]\n");
    fprintf(stderr,"                   pdbdir [out.db]\n");
    fprintf(stderr,"--or--\n");
-   fprintf(stderr,"       buildloopdb -p [-m minLength][-x maxLength]\
+   fprintf(stderr,"       buildloopdb -p [-v][-m minLength][-x maxLength]\
 [-t disttable]\n");
    fprintf(stderr,"                   [in.pdb [out.db]]\n");
    
@@ -401,6 +433,7 @@ Martin.\n");
    fprintf(stderr,"                   -m Set minimum loop length\n");
    fprintf(stderr,"                   -x Set maximum loop length\n");
    fprintf(stderr,"                   -t Specify a distance table\n");
+   fprintf(stderr,"                   -v Verbose\n");
 
    fprintf(stderr,"\nReads a directory of PDB files and identifies \
 stretches that match\n");
