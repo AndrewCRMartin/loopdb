@@ -90,12 +90,13 @@ BOOL ParseCmdLine(int argc, char **argv, char *infile, char *outfile,
                   int *minLength, int *maxLength, BOOL *isDirectory,
                   char *distTable, BOOL *verbose);
 void Usage(void);
-void RunAnalysis(FILE *out, PDB *pdb, int minLength, int maxLength, 
+int  RunAnalysis(FILE *out, PDB *pdb, int minLength, int maxLength, 
                  char *pdbCode, REAL minTable[3][3], REAL maxTable[3][3]);
 void PrintResults(FILE *out, char *pdbCode, int separation, PDB *p[3], 
                   PDB *q[3], REAL distMat[3][3]);
 void ProcessFile(FILE *in, FILE *out, int minLength, int maxLength,
-                 char *pdbCode, REAL minTable[3][3], REAL maxTable[3][3]);
+                 char *pdbCode, REAL minTable[3][3], REAL maxTable[3][3],
+                 BOOL verbose);
 void ProcessAllFiles(FILE *out, char *dirName, int minLength, 
                      int maxLength, REAL minTable[3][3], 
                      REAL maxTable[3][3], BOOL verbose);
@@ -158,7 +159,7 @@ int main(int argc, char **argv)
             char *pdbCode;
             pdbCode = blFNam2PDB(infile);
             ProcessFile(in, out, minLength, maxLength, pdbCode, 
-                        minTable, maxTable);
+                        minTable, maxTable, verbose);
          }
          else
          {
@@ -258,7 +259,7 @@ list.\n");
          pdbCode = blFNam2PDB(fname);
          fprintf(stderr,"Processing: %s\n", fname);
          ProcessFile(in, out, minLength, maxLength, pdbCode, 
-                     minTable, maxTable);
+                     minTable, maxTable, verbose);
          fclose(in);
       }
    }
@@ -269,7 +270,7 @@ list.\n");
 /************************************************************************/
 /*>void ProcessFile(FILE *in, FILE *out, int minLength, int maxLength, 
                     char *pdbCode, REAL minTable[3][3], 
-                    REAL maxTable[3][3])
+                    REAL maxTable[3][3], BOOL verbose)
    --------------------------------------------------------------------
 *//**
    \param[in]   *in        Input file pointer (for PDB file)
@@ -279,13 +280,16 @@ list.\n");
    \param[in]   pdbCode    PDB code for this file
    \param[in]   minTable   table of minimum distances
    \param[in]   maxTable   table of maximum distances
+   \param[in]   verbose    Verbose mode
 
    Obtains the PDB data and calls RunAnalysis() to do the real work
 
 -  14.07.15 Original   By: ACRM
+-  03.11.15 RunAnalysis() now returns number of loops found
 */
 void ProcessFile(FILE *in, FILE *out, int minLength, int maxLength, 
-                 char *pdbCode, REAL minTable[3][3], REAL maxTable[3][3])
+                 char *pdbCode, REAL minTable[3][3], REAL maxTable[3][3],
+                 BOOL verbose)
 {
    PDB *pdb;
    int natoms;
@@ -295,9 +299,13 @@ void ProcessFile(FILE *in, FILE *out, int minLength, int maxLength,
       /* Extract the CAs                                                */
       if((pdb = blSelectCaPDB(pdb))!=NULL)
       {
+         int nLoops;
+         
          /* Run the analysis                                            */
-         RunAnalysis(out, pdb, minLength, maxLength, pdbCode, 
-                     minTable, maxTable);
+         nLoops = RunAnalysis(out, pdb, minLength, maxLength, pdbCode, 
+                              minTable, maxTable);
+         if(verbose)
+            fprintf(stderr,"%d loops found\n", nLoops);
       
       }
       FREELIST(pdb, PDB);
@@ -466,9 +474,9 @@ optional.\n\n");
 }
 
 /************************************************************************/
-/*>void RunAnalysis(FILE *out, PDB *pdb, int minLength, int maxLength, 
-                    char *pdbCode, REAL minTable[3][3], 
-                    REAL maxTable[3][3])
+/*>int RunAnalysis(FILE *out, PDB *pdb, int minLength, int maxLength, 
+                   char *pdbCode, REAL minTable[3][3], 
+                   REAL maxTable[3][3])
    --------------------------------------------------------------------
 *//**
    \param[in]   *out        Output file pointer
@@ -485,15 +493,17 @@ optional.\n\n");
    loop length requirements.
 
 -  14.07.15 Original   By: ACRM
+-  03.11.15 Now returns number of loops found
 */
-void RunAnalysis(FILE *out, PDB *pdb, int minLength, int maxLength, 
-                 char *pdbCode, REAL minTable[3][3], REAL maxTable[3][3])
+int RunAnalysis(FILE *out, PDB *pdb, int minLength, int maxLength, 
+                char *pdbCode, REAL minTable[3][3], REAL maxTable[3][3])
 {
    PDB  *n[3], *c[3],
         *chain,
         *nextChain;
    REAL distMat[3][3];
-   int  i, j,
+   int  i, j, 
+        nloops = 0,
         separation;
    
    for(chain=pdb; chain!=NULL; chain=nextChain)
@@ -552,8 +562,12 @@ void RunAnalysis(FILE *out, PDB *pdb, int minLength, int maxLength,
                         }
 
                         if(!badDistance)
+                        {
+                           nloops++;
                            PrintResults(out, pdbCode, separation, n, c, 
                                         distMat);
+                        }
+                        
                      }
                   }
                }
@@ -561,6 +575,7 @@ void RunAnalysis(FILE *out, PDB *pdb, int minLength, int maxLength,
          }
       }
    }
+   return(nloops);
 }
 
 
