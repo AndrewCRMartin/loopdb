@@ -262,6 +262,11 @@ list.\n");
                      minTable, maxTable, verbose);
          fclose(in);
       }
+      else if(verbose)
+      {
+         fprintf(stderr,"Could not open file: %s\n", fname);
+      }
+      
    }
 
    blFreeStringList(fileList);
