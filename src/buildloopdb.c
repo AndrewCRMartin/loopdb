@@ -237,6 +237,9 @@ void ProcessAllFiles(FILE *out, char *dirName, int minLength,
       {
          if(dent->d_name[0] != '.')
          {
+            if(limit && (++count > limit))
+               break;
+
             sprintf(filename,"%s/%s",dirName,dent->d_name);
             if((fileList = blStoreString(fileList, filename))==NULL)
             {
@@ -244,8 +247,6 @@ void ProcessAllFiles(FILE *out, char *dirName, int minLength,
 list.\n");
                exit(1);
             }
-            if(limit && (++count > limit))
-               break;
             
             if(verbose)
             {
@@ -315,6 +316,7 @@ void ProcessFile(FILE *in, FILE *out, int minLength, int maxLength,
          int nLoops;
          
          /* Run the analysis                                            */
+         /*** This is terminating the end of the first chain ***/
          nLoops = RunAnalysis(out, pdb, minLength, maxLength, pdbCode, 
                               minTable, maxTable);
          if(verbose)
