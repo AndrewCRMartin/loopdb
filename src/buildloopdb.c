@@ -151,6 +151,7 @@ int main(int argc, char **argv)
             PrintHeader(out, infile);
             ProcessAllFiles(out, infile, minLength, maxLength, 
                             minTable, maxTable, verbose, limit);
+            FCLOSE(out);
          }
       }
       else
@@ -161,6 +162,8 @@ int main(int argc, char **argv)
             pdbCode = blFNam2PDB(infile);
             ProcessFile(in, out, minLength, maxLength, pdbCode, 
                         minTable, maxTable, verbose);
+            FCLOSE(in);
+            FCLOSE(out);
          }
          else
          {
@@ -316,7 +319,7 @@ void ProcessFile(FILE *in, FILE *out, int minLength, int maxLength,
          int nLoops;
          
          /* Run the analysis                                            */
-         /*** This is terminating the end of the first chain ***/
+         /*** BUG: This is terminating the end of the first chain ***/
          nLoops = RunAnalysis(out, pdb, minLength, maxLength, pdbCode, 
                               minTable, maxTable);
          if(verbose)
@@ -522,11 +525,13 @@ optional.\n\n");
 
    Does the real work of analyzing a structure. Steps through N-ter and
    C-ter triplets of residues to find those that match the requirements
-   of the minTable and maxTable distance matrices as well as any spcified
+   of the minTable and maxTable distance matrices as well as any specified
    loop length requirements.
 
 -  14.07.15 Original   By: ACRM
 -  03.11.15 Now returns number of loops found
+-  04.11.15 Now calls blFindNextChain() rather than blFindNextChainPDB()
+            so the the first chain isn't terminated.
 */
 int RunAnalysis(FILE *out, PDB *pdb, int minLength, int maxLength, 
                 char *pdbCode, REAL minTable[3][3], REAL maxTable[3][3])
@@ -541,7 +546,7 @@ int RunAnalysis(FILE *out, PDB *pdb, int minLength, int maxLength,
    
    for(chain=pdb; chain!=NULL; chain=nextChain)
    {
-      nextChain = blFindNextChainPDB(chain);
+      nextChain = blFindNextChain(chain);
       
       /* Find an N-terminal residue                                     */
       for(n[0]=chain; n[0]!=NULL; NEXT(n[0]))
