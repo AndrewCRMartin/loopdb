@@ -3,8 +3,8 @@
 
    \file       buildloopdb.c
    
-   \version    V1.1
-   \date       03.11.15
+   \version    V1.2
+   \date       10.12.15
    \brief      Build a database of CDR-H3 like loops
    
    \copyright  (c) Dr. Andrew C. R. Martin, UCL, 2015
@@ -56,6 +56,8 @@
    V1.1   03.11.15  Now reads the file list then processes files
                     rather than doing both in one step
                     Added -v
+   V1.2   10.12.15  Added BackboneComplete() to check that all backbone
+                    atoms are present
 
 *************************************************************************/
 /* Includes
@@ -76,7 +78,8 @@
 /* Defines and macros
 */
 #define MAXBUFF                160
-#define MAX_CA_CA_DISTANCE_SQ   16.0  /* max CA-CA distance of 4.0      */
+#define MAX_CA_CA_DISTANCE_SQ   16.0  /* max CA-CA distance of 4.0A     */
+#define MAX_BOND_DISTANCE_SQ     4.0  /* max bond length of 2.0A        */
 
 /************************************************************************/
 /* Globals
@@ -105,6 +108,8 @@ void ReadDistanceTable(char *distTable, REAL minTable[3][3],
                        REAL maxTable[3][3]);
 void SetUpMinMaxTables(REAL minTable[3][3], REAL maxTable[3][3]);
 BOOL ChainIsIntact(PDB *start, PDB *end);
+BOOL BackboneComplete(PDB *pdb);
+
 
 /************************************************************************/
 /*>int main(int argc, char **argv)
@@ -303,6 +308,7 @@ list.\n");
 
 -  14.07.15 Original   By: ACRM
 -  03.11.15 RunAnalysis() now returns number of loops found
+-  10.12.15 Added check that PDB backbone has no missing atoms
 */
 void ProcessFile(FILE *in, FILE *out, int minLength, int maxLength, 
                  char *pdbCode, REAL minTable[3][3], REAL maxTable[3][3],
@@ -313,23 +319,30 @@ void ProcessFile(FILE *in, FILE *out, int minLength, int maxLength,
 
    if((pdb = blReadPDBAtoms(in, &natoms))!=NULL)
    {
-      /* Extract the CAs                                                */
-      if((pdb = blSelectCaPDB(pdb))!=NULL)
+      if(BackboneComplete(pdb))
       {
-         int nLoops;
-         
-         /* Run the analysis                                            */
-         /*** BUG: This is terminating the end of the first chain ***/
-         nLoops = RunAnalysis(out, pdb, minLength, maxLength, pdbCode, 
-                              minTable, maxTable);
-         if(verbose)
-            fprintf(stderr,"%d loops found\n", nLoops);
-
-         FREELIST(pdb, PDB);
+         /* Extract the CAs                                             */
+         if((pdb = blSelectCaPDB(pdb))!=NULL)
+         {
+            int nLoops;
+            
+            /* Run the analysis                                         */
+            /*** BUG: This is terminating the end of the first chain  ***/
+            nLoops = RunAnalysis(out, pdb, minLength, maxLength, pdbCode, 
+                                 minTable, maxTable);
+            if(verbose)
+               fprintf(stderr,"%d loops found\n", nLoops);
+            
+            FREELIST(pdb, PDB);
+         }
+         else if(verbose)
+         {
+            fprintf(stderr,"No CA atoms extracted\n");
+         }
       }
-      else if(verbose)
+      else
       {
-         fprintf(stderr,"No CA atoms extracted\n");
+         FREELIST(pdb, PDB);
       }
    }
    else if(verbose)
@@ -459,10 +472,11 @@ BOOL ParseCmdLine(int argc, char **argv, char *infile, char *outfile,
    Prints a usage message 
 
 -  14.07.15 Original   By: ACRM
+-  10.12.15 V1.2
 */
 void Usage(void)
 {
-   fprintf(stderr,"\nbuildloopdb V1.1 (c) 2015 UCL, Dr. Andrew C.R. \
+   fprintf(stderr,"\nbuildloopdb V1.2 (c) 2015 UCL, Dr. Andrew C.R. \
 Martin.\n");
 
    fprintf(stderr,"\nUsage: buildloopdb [-v][-m minLength][-x maxLength]\
@@ -762,3 +776,90 @@ void SetUpMinMaxTables(REAL minTable[3][3], REAL maxTable[3][3])
       }
    }
 }
+
+
+/************************************************************************/
+/*>BOOL BackboneComplete(PDB *pdb)
+   -------------------------------
+*//**
+   \param[in]  *pdb   PDB linked list
+   \return            Is the backbone complete?
+
+   Checks whether the backbone is complete - thus rejecting CA-only files
+   like 3ixx
+
+-  10.12.15 Original  By: ACRM
+*/
+BOOL BackboneComplete(PDB *pdb)
+{
+   PDB  *p, 
+        *start,
+        *nextRes,
+        *n     = NULL, 
+        *ca    = NULL,
+        *c     = NULL,
+        *o     = NULL,
+        *cPrev = NULL;
+   char chain[blMAXCHAINLABEL];
+
+   chain[0] = '\0';
+   
+   /* Step through the PDB file one residue at a time                   */
+   for(start=pdb; start!=NULL; start=nextRes)
+   {
+      nextRes = blFindNextResidue(start);
+      
+      /* If the chain has changed we reset everything                   */
+      if(!CHAINMATCH(start->chain, chain))
+      {
+         n = ca = c = o = cPrev = NULL;
+         strncpy(chain, start->chain, blMAXCHAINLABEL);
+      }
+      
+
+      /* Step through the residue finding the important atoms           */
+      cPrev = c;
+      for(p=start; p!=nextRes; NEXT(p))
+      {
+         if(!strncmp(p->atnam, "N   ", 4))
+            n=p;
+
+         if(!strncmp(p->atnam, "CA  ", 4))
+            ca=p;
+
+         if(!strncmp(p->atnam, "C   ", 4))
+            c=p;
+
+         if(!strncmp(p->atnam, "O   ", 4))
+            o=p;
+      }
+
+      /* Either all atoms must be found (protein) or none of the atoms
+         found (nucleic acid)
+      */
+      if(((n==NULL) && (ca==NULL) && (c==NULL) && (o==NULL)) || /* None */
+         ((n!=NULL) && (ca!=NULL) && (c!=NULL) && (o!=NULL)))   /* All  */
+      {
+         /* Check the distances                                         */
+         if(cPrev!=NULL)
+         {
+            if(DISTSQ(cPrev,n) > MAX_BOND_DISTANCE_SQ)
+               return(FALSE);
+         }
+         if(DISTSQ(n,ca) > MAX_BOND_DISTANCE_SQ)
+            return(FALSE);
+         if(DISTSQ(ca,c) > MAX_BOND_DISTANCE_SQ)
+            return(FALSE);
+         if(DISTSQ(c,o)  > MAX_BOND_DISTANCE_SQ)
+            return(FALSE);
+
+         return(TRUE);
+      }
+      else
+      {
+         return(FALSE);
+      }
+   }
+   return(TRUE);
+}
+
