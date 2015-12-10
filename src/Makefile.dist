@@ -28,7 +28,8 @@ BLIBS  = bioplib/ReadPDB.o \
          bioplib/FindNextChainPDB.o \
          bioplib/FindNextResidue.o \
          bioplib/StoreString.o \
-         bioplib/FreeStringList.o
+         bioplib/FreeStringList.o \
+         bioplib/StructurePDB.o
 
 SOBJS  = scanloopdb.o
 SLIBS  = bioplib/OpenStdFiles.o \
