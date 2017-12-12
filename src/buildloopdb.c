@@ -3,11 +3,11 @@
 
    \file       buildloopdb.c
    
-   \version    V1.2
-   \date       10.12.15
+   \version    V1.3
+   \date       12.12.17
    \brief      Build a database of CDR-H3 like loops
    
-   \copyright  (c) Dr. Andrew C. R. Martin, UCL, 2015
+   \copyright  (c) Dr. Andrew C. R. Martin, UCL, 2015-2017
    \author     Dr. Andrew C. R. Martin
    \par
                Institute of Structural & Molecular Biology,
@@ -58,6 +58,8 @@
                     Added -v
    V1.2   10.12.15  Added BackboneComplete() to check that all backbone
                     atoms are present
+   V1.3   12.12.17  Bug fix in BackboneComplete() and changed default
+                    minimum length to 1 residue
 
 *************************************************************************/
 /* Includes
@@ -116,6 +118,7 @@ BOOL BackboneComplete(PDB *pdb);
    -------------------------------
 *//**
 -  14.07.15 Original   By: ACRM
+-  12.12.17 Changed default minimum length to 1 residue
 */
 int main(int argc, char **argv)
 {
@@ -124,7 +127,7 @@ int main(int argc, char **argv)
         distTable[MAXBUFF];
    FILE *in         = stdin,
         *out        = stdout;
-   int  minLength   = 0,
+   int  minLength   = 1,
         maxLength   = 0,
         retval      = 0,
         limit       = 0;
@@ -375,6 +378,7 @@ void ProcessFile(FILE *in, FILE *out, int minLength, int maxLength,
 
 -  14.07.15 Original    By: ACRM
 -  04.11.15 Added -v and -l
+-  12.12.17 Changed default minimum length to 1
 */
 BOOL ParseCmdLine(int argc, char **argv, char *infile, char *outfile,
                   int *minLength, int *maxLength, BOOL *isDirectory,
@@ -386,7 +390,8 @@ BOOL ParseCmdLine(int argc, char **argv, char *infile, char *outfile,
    argv++;
    
    infile[0]    = outfile[0] = '\0';
-   *minLength   = *maxLength = 0;
+   *minLength   = 1;
+   *maxLength   = 0;
    *isDirectory = TRUE;
    distTable[0] = '\0';
    *limit       = 0;
@@ -473,10 +478,11 @@ BOOL ParseCmdLine(int argc, char **argv, char *infile, char *outfile,
 
 -  14.07.15 Original   By: ACRM
 -  10.12.15 V1.2
+-  12.12.17 V1.3
 */
 void Usage(void)
 {
-   fprintf(stderr,"\nbuildloopdb V1.2 (c) 2015 UCL, Dr. Andrew C.R. \
+   fprintf(stderr,"\nbuildloopdb V1.3 (c) 2015-17 UCL, Dr. Andrew C.R. \
 Martin.\n");
 
    fprintf(stderr,"\nUsage: buildloopdb [-v][-m minLength][-x maxLength]\
@@ -489,8 +495,9 @@ Martin.\n");
    
 
    fprintf(stderr,"\n                   -p Argument is a PDB file\n");
-   fprintf(stderr,"                   -m Set minimum loop length\n");
-   fprintf(stderr,"                   -x Set maximum loop length\n");
+   fprintf(stderr,"                   -m Set minimum loop length [1]\n");
+   fprintf(stderr,"                   -x Set maximum loop length \
+[None]\n");
    fprintf(stderr,"                   -t Specify a distance table\n");
    fprintf(stderr,"                   -l Limit the number of PDB files\n");
    fprintf(stderr,"                   -v Verbose\n");
@@ -837,8 +844,11 @@ BOOL BackboneComplete(PDB *pdb)
       /* Either all atoms must be found (protein) or none of the atoms
          found (nucleic acid)
       */
-      if(((n==NULL) && (ca==NULL) && (c==NULL) && (o==NULL)) || /* None */
-         ((n!=NULL) && (ca!=NULL) && (c!=NULL) && (o!=NULL)))   /* All  */
+      if((n==NULL) && (ca==NULL) && (c==NULL) && (o==NULL))     /* None */
+      {
+         continue;
+      }
+      else if((n!=NULL) && (ca!=NULL) && (c!=NULL) && (o!=NULL))/* All  */
       {
          /* Check the distances                                         */
          if(cPrev!=NULL)
@@ -852,8 +862,6 @@ BOOL BackboneComplete(PDB *pdb)
             return(FALSE);
          if(DISTSQ(c,o)  > MAX_BOND_DISTANCE_SQ)
             return(FALSE);
-
-         return(TRUE);
       }
       else
       {
