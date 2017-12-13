@@ -59,7 +59,9 @@
    V1.2   10.12.15  Added BackboneComplete() to check that all backbone
                     atoms are present
    V1.3   12.12.17  Bug fix in BackboneComplete() and changed default
-                    minimum length to 1 residue
+                    minimum length to 1 residue. Also fixed problem
+                    with multi-chain PDBs where chains after the first
+                    would be analyzed multiple times
 
 *************************************************************************/
 /* Includes
@@ -330,7 +332,6 @@ void ProcessFile(FILE *in, FILE *out, int minLength, int maxLength,
             int nLoops;
             
             /* Run the analysis                                         */
-            /*** BUG: This is terminating the end of the first chain  ***/
             nLoops = RunAnalysis(out, pdb, minLength, maxLength, pdbCode, 
                                  minTable, maxTable);
             if(verbose)
@@ -553,6 +554,9 @@ optional.\n\n");
 -  03.11.15 Now returns number of loops found
 -  04.11.15 Now calls blFindNextChain() rather than blFindNextChainPDB()
             so the the first chain isn't terminated.
+-  13.12.17 Added check on chain change when finding Nter and Cter
+            residues (fixed bug with 2nd and subsequent chains being
+            done multiple times).
 */
 int RunAnalysis(FILE *out, PDB *pdb, int minLength, int maxLength, 
                 char *pdbCode, REAL minTable[3][3], REAL maxTable[3][3])
@@ -570,8 +574,11 @@ int RunAnalysis(FILE *out, PDB *pdb, int minLength, int maxLength,
       nextChain = blFindNextChain(chain);
       
       /* Find an N-terminal residue                                     */
-      for(n[0]=chain; n[0]!=NULL; NEXT(n[0]))
+      for(n[0]=chain; 
+          n[0]!=NULL && n[0]!=nextChain;
+          NEXT(n[0]))
       {
+
          /* And find the next two                                       */
          n[1] = (n[0])?n[0]->next:NULL;
          n[2] = (n[1])?n[1]->next:NULL;
@@ -582,7 +589,9 @@ int RunAnalysis(FILE *out, PDB *pdb, int minLength, int maxLength,
             separation = 0;
             
             /* Find a C-terminal residue                                */
-            for(c[0]=n[2]->next->next; c[0]!=NULL; NEXT(c[0]))
+            for(c[0]=n[2]->next->next; 
+                c[0]!=NULL && c[0]!=nextChain;
+                NEXT(c[0]))
             {
                /* If the spacing between N and Cter is too long or not
                   long enough, break out
@@ -615,6 +624,7 @@ int RunAnalysis(FILE *out, PDB *pdb, int minLength, int maxLength,
                                  (distMat[i][j] > maxTable[i][j]))
                               {
                                  badDistance = TRUE;
+                                 i=4; /* Break out of outer loop        */
                                  break;
                               }
                            }
